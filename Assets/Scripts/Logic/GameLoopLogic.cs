@@ -13,32 +13,32 @@ namespace Logic
         public static GameLoopLogic Istance { get; private set; }
         
         // Params
-        public int rows = 2;
-        public int cols = 2;
+        [SerializeField] private GamePreset _presetEasy;
+        [SerializeField] private GamePreset _presetMedium;
+        [SerializeField] private GamePreset _presetHard;
         
-        public int nMasks = 3;
-        public int nMasksApplication = 3;
-        
-        public int maskRadius = 1;
-        public int min = 0;
-        public int max = 2;
-        public int count = 3;
+        private GamePreset _currentPreset;
 
         // Game State
-        private int score;
-        private int currentTimer;
+        public int Score { get; private set; }
+        public int RoundsCompleted { get; private set; }
+        public int CurrentTimer { get; private set; }
         
         public int CurrentMask {get; set;}
         
         private int[,] initialMatrix;
-        private Stack<int[,]> matrixStates;
+        private Stack<int[,]> _matrixHistory;
+        
         private List<Mask> _masksList;
+        private Dictionary<Mask, int> _maskUses;
+        private Stack<Mask> _maskHistory;
+        
         
         // Other Game Objects
         private UIPresenter _presenter;
         
         // Events
-        public event Action NextRound;
+        public event Action NextRoundEvent;
         public event Action EndGame;
         
         
@@ -54,7 +54,13 @@ namespace Logic
             _presenter = UIPresenter.Istance;
             
             _masksList = new List<Mask>();
-            matrixStates = new Stack<int[,]>();
+            _matrixHistory = new Stack<int[,]>();
+            
+            _maskUses = new Dictionary<Mask, int>();
+            _maskHistory = new Stack<Mask>();
+            
+            // Game State
+            Score = 0;
         }
 
         private void Start()
@@ -65,84 +71,167 @@ namespace Logic
         private IEnumerator LateStart()
         {
             yield return null;
-            InitRound();
+            ResetRound();
         }
 
-        // Initialize the round, create a new matrix and filters based on the game params
-        public void InitRound()
+        // -------------------------------
+        // ---- Round Flow Management ----
+        // -------------------------------
+        
+        public void NextRound()
         {
+            Score += 7;
+            RoundsCompleted++;
+            
+            UpdateState();
+            InitRound();
+            
+            NextRoundEvent?.Invoke();
+        }
+        
+        public void ResetRound()
+        {
+            InitRound();
+            NextRoundEvent?.Invoke();
+        }
+
+        private void InitRound()
+        {
+            UpdateState();
+                
             // Clear previous data
-            initialMatrix = new int[rows, cols];
+            initialMatrix = new int[_currentPreset.rows, _currentPreset.cols];
             Array.Clear(initialMatrix, 0, initialMatrix.Length);
 
             _masksList.Clear();
-            matrixStates.Clear();
+            _matrixHistory.Clear();
+            _maskUses.Clear();
             
-            // Generate Round Masks
+            // Generate Masks
             Mask tempMask;
-            for (int i = 0; i < nMasks; i++)
+            for (int i = 0; i < _currentPreset.nMasks; i++)
             {
-                tempMask = MaskFactory.CreateRandomMask(maskRadius, min, max, count);
+                tempMask = MaskFactory.CreateRandomMask(_currentPreset.maskRadius, _currentPreset.min, _currentPreset.max, _currentPreset.count);
                 _masksList.Add(tempMask);
+                _maskUses.Add(tempMask, 0);
             }
             
             // Apply masks at random on the matrix
-            for (int i = 0; i < nMasksApplication; i++)
+            for (int i = 0; i < _currentPreset.nMasksApplication; i++)
             {
                 // Select a random mask
                 tempMask = _masksList[Random.Range(0, _masksList.Count)];
                 
                 // Select a random position
-                int x = Random.Range(0, rows);
-                int y = Random.Range(0, cols);
+                int x = Random.Range(1, _currentPreset.rows - 1);
+                int y = Random.Range(1, _currentPreset.cols - 1);
                 
                 // Apply mask
-                initialMatrix = tempMask.ApplySum(initialMatrix, x, y, false);
+                tempMask.ApplySum(initialMatrix, x, y, false);
+                
+                _maskUses[tempMask]++;
             }
             
-            matrixStates.Push(initialMatrix);
+            _matrixHistory.Push(initialMatrix);
             CurrentMask = 0;
-            
-            NextRound?.Invoke();
         }
 
+        private void UpdateState()
+        {
+            // Update difficulty based on completitions
+            if (RoundsCompleted < 1)
+                _currentPreset =  _presetEasy;
+            else if (RoundsCompleted < 2)
+                _currentPreset = _presetMedium;
+            else if (RoundsCompleted < 3)
+                _currentPreset = _presetHard;
+        }
+
+        // -----------------
+        // ---- Actions ----
+        // -----------------
         public void ApplyMask(int x, int y)
         {
             Mask currentMask = _masksList[CurrentMask];
 
+            if (_maskUses[currentMask] == 0)
+            {
+                return;
+            }
+
             int[,] currentMatrix = GetCurrentMatrix();
-            int[,] copy = new int[rows, cols];
+            int[,] copy = new int[_currentPreset.rows, _currentPreset.cols];
             Array.Copy(currentMatrix, copy, currentMatrix.Length);
             
             currentMask.ApplySum(copy, x, y, true);
-            matrixStates.Push(copy);
+            
+            bool isAllZero = copy.Cast<int>().All(x => x == 0);
+
+            if (isAllZero)
+            {
+                Invoke(nameof(NextRound), 1f);
+            }
+            
+            // Update State
+            _maskHistory.Push(currentMask);
+            _maskUses[currentMask]--;
+
+            int index = 0;
+            if (_maskUses[currentMask] == 0)
+            {
+                foreach (Mask mask in _masksList)
+                {
+                    if (_maskUses[mask] != 0)
+                    {
+                        CurrentMask = index;
+                        break;
+                    }
+                    index++;
+                }
+            }
+            
+            
+            _matrixHistory.Push(copy);
         }
 
         public void Undo()
         {
-            if (matrixStates.Count > 1)
+            if (_matrixHistory.Count > 1 && _maskHistory.Count > 0)
             {
-                matrixStates.Pop();
+                _matrixHistory.Pop();
+                Mask lastMask = _maskHistory.Pop();
+                _maskUses[lastMask]++;
             }
+            
         }
         
         // GETTERS and SETTERS
         public int[,] GetCurrentMatrix()
         {
-            return matrixStates.Peek();
+            return _matrixHistory.Peek();
         }
 
         public List<Mask> GetMasks()
         {
             return _masksList;
         }
+
+        public int GetMaskApplications(Mask mask)
+        {
+            return _maskUses[mask];
+        }
+        
+        public int GetMaskApplications(int id)
+        {
+            return _maskUses[_masksList[id]];
+        }
         
         public void Print(int[,] matrix)
         {
             string s = "";
-            for (int x = 0; x < rows; x++)
+            for (int x = 0; x < _currentPreset.rows; x++)
             {
-                for (int y = 0; y < cols; y++)
+                for (int y = 0; y < _currentPreset.cols; y++)
                 {
                     s += "[" + matrix[x, y] + "] ";
                 }
