@@ -1,78 +1,88 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
+using Utils;
+using Random = UnityEngine.Random;
 
 public class Mask
 {
-    [SerializeField] private int _nCols;
-    [SerializeField] private int _nRows;
+    // mask parameters
+    public int Radius { get; }
+    public int NCols { get; }
+    public int NRows { get; }
     
-    private int[] _mask;
+    public int Length { get; }
+    
+    private int[,] items;
 
-    public Mask(int radious)
+    public Mask(int radius)
     {
-        _nCols = radious * 2 + 1;
-        _nRows = _nCols;
+        Radius = radius;
+        NCols = radius * 2 + 1;
+        NRows = NCols;
         
-        _mask = new int[_nCols * _nRows];
+        Length = NRows * NCols;
+        
+        items = new int[NRows, NCols];
+    }
+    
+    // Indexer
+    public int this[int i, int j]
+    {
+        get { return items[i, j]; }
+        set { items[i, j] = value; }
+    }
+    
+    // Reset the mask to a null matrix
+    public void Reset()
+    {
+        Array.Clear(items, 0, items.Length);
     }
 
-    public void ApplyMask(int iCols, int jRows)
+    public int[,] ApplySum(int[,] matrix, int x, int y, bool subtract)
     {
+        int sign = subtract ? -1 : 1;
         
-    }
-
-    public void GenerateMask(int min, int max, int nCells)
-    {
-        nCells = Mathf.Clamp(nCells, 1, _mask.Length);
-
-        List<int> randomCells= GenerateUniqueRandomNumbers(_mask.Length, nCells);
-
-        foreach (int cellIndex in randomCells)
+        // Find relative left corner position
+        int iMinMatrix = x - Radius;
+        int jMinMatrix = y - Radius;
+        
+        // Current Matrix indexes
+        int iMatrix;
+        int jMatrix;
+        
+        for (int i = 0; i < NRows; i++)
         {
-            int randomNumber = Random.Range(min, max);
-
-            while (randomNumber == 0)
+            for (int j = 0; j < NCols; j++)
             {
-                randomNumber = Random.Range(min, max);
+                iMatrix = iMinMatrix + i;
+                jMatrix = jMinMatrix + j;
+                
+                // Check if index is in range
+                if (iMatrix >= 0 && iMatrix < matrix.GetLength(0) && jMatrix >= 0 && jMatrix < matrix.GetLength(1))
+                {
+                    matrix[iMatrix, jMatrix] += items[i, j] * sign;
+                }
             }
-            
-            _mask[cellIndex] = randomNumber;
         }
-    }
-    
-    private List<int> GenerateUniqueRandomNumbers(int max, int count)
-    {
-        List<int> numbers = new List<int>();
-        for (int i = 0; i <= max; i++)
-            numbers.Add(i);
-
-        for (int i = numbers.Count - 1; i > 0; i--)
-        {
-            int j = Random.Range(0, i + 1); // Random.Range è inclusivo su min, esclusivo su max
-            (numbers[i], numbers[j]) = (numbers[j], numbers[i]);
-        }
-
-        if (count > numbers.Count)
-        {
-            Debug.LogWarning("Count maggiore di n+1! Ridotto al massimo disponibile.");
-            count = numbers.Count;
-        }
-
-        return numbers.GetRange(0, count);
+        
+        return matrix;
     }
 
-    public void PrintMask()
+    public override string ToString()
     {
         string s = "";
-        for (int iCol = 0; iCol < _nCols; iCol++)
+        for (int x = 0; x < NCols; x++)
         {
-            for (int jRow = 0; jRow < _nRows; jRow++)
+            for (int y = 0; y < NRows; y++)
             {
-                s += "[" + _mask[jRow + iCol * _nRows] + "] ";
+                s += "[" + items[x, y] + "] ";
             }
 
             s += '\n';
         }
-        Debug.Log(s);
+        
+        return s;
     }
 }
