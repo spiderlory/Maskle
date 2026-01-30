@@ -9,12 +9,12 @@ namespace Model
     {
 
         public static IReadOnlyGameState Instance  {get; private set;}
-        private int _maxScore;
+        private int _maxScore = 0;
         private int _currentScore;
 
         private int _currentRound;
 
-        private int _timeLeft;
+        private float _timeLeft;
 
         private int[,] _currentMatrix;
         private List<IReadOnlyMask> _masksList;
@@ -62,8 +62,6 @@ namespace Model
             {
                 _maxScore = _currentScore;
             }
-            
-            print(_maxScore);
         }
 
         public void ResetScore()
@@ -100,14 +98,14 @@ namespace Model
         
         // READ
         
-        public int GetTimeLeft()
+        public float GetTimeLeft()
         {
             return _timeLeft;
         }
         
         // WRITE
         
-        public void SetTimeLeft(int timeLeft)
+        public void SetTimeLeft(float timeLeft)
         {
             _timeLeft = timeLeft;
         }

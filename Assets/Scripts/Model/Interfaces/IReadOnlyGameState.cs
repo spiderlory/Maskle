@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEditor.ShaderGraph.Internal;
 
 namespace Model.Interfaces
 {
@@ -7,7 +8,7 @@ namespace Model.Interfaces
         public int GetMaxScore();
         public int GetCurrentScore();
         public int GetCurrentRound();
-        public int GetTimeLeft();
+        public float GetTimeLeft();
 
         public int[,] GetCurrentMatrix();
         public int GetMatrixValueAt(int index);

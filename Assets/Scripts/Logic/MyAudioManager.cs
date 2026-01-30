@@ -32,46 +32,49 @@ namespace Logic
             else
             {
                 DontDestroyOnLoad(gameObject);
-            
                 Instance = this;
-                _effectsSource = GetComponent<AudioSource>();
+                SceneManager.sceneLoaded += SetMusic;
             }
-            
-   
         }
-
+        
         private void Start()
         {
-            string sceneName = SceneManager.GetActiveScene().name;
+            SetMusic(SceneManager.GetActiveScene(), LoadSceneMode.Single);
+        }
+        
+        private void SetMusic(Scene scene, LoadSceneMode mode)
+        {
+            string sceneName = scene.name;
             
-            if (sceneName != "MainMenu")
+            if (sceneName == "Menu")
             {
-                StartCoroutine(FadeOutIn(_mainMenuMusic));
+                Instance._musicSource.Stop();
+                Instance._musicSource.clip = _mainMenuMusic;
+                Instance._musicSource.Play();
             }
-            else
+            if (sceneName == "MainGame")
             {
-                StartCoroutine(FadeOutIn(_gameMusic[Random.Range(0, _gameMusic.Count)]));
+                Instance._musicSource.Stop();
+                Instance._musicSource.clip = _gameMusic[Random.Range(0, _gameMusic.Count)];
+                Instance._musicSource.Play();
+                
             }
         }
 
-        public void PlayCellClickSound()
+        public void PlayClickSound()
         {
-            _effectsSource.PlayOneShot(_cellClickSound);
-        }
-
-        public void PlayMaskClickSound()
-        {
-            _effectsSource.PlayOneShot(_maskClickSound);
+            Instance._effectsSource.PlayOneShot(_maskClickSound);
         }
 
         public void Mute()
         {
-            _musicSource.mute = true;
+            Instance._musicSource.mute = true;
+
         }
 
         public void Unmute()
         {
-            _musicSource.mute = false;
+            Instance._musicSource.mute = false;
         }
         
         private IEnumerator FadeOutIn(AudioClip newClip)
@@ -101,7 +104,5 @@ namespace Logic
 
             _musicSource.volume = startVolume;
         }
-        
-        
     }
 }

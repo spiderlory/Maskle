@@ -23,8 +23,9 @@ namespace Logic
 
         // Game State
         private GameState _gameState;
-        
         private GameStateHistory _gameStateHistory;
+
+        [SerializeField] private float _timer;
         
         
         // Other Game Objects
@@ -55,6 +56,7 @@ namespace Logic
         private void Start()
         {
             _gameState = (GameState) GameState.Instance;
+            _gameState.SetTimeLeft(_timer);
             _gameState.Reset();
             
             StartCoroutine(LateStart());
@@ -64,6 +66,19 @@ namespace Logic
         {
             yield return null;
             ResetRound();
+        }
+
+        private void Update()
+        {
+            _timer -= Time.deltaTime;
+            _timer = Mathf.Max(0.0f, _timer);
+            
+            _gameState.SetTimeLeft(_timer);
+            
+            if (_timer <= 0)
+            {
+                _sceneManager.GoToMenu();
+            }
         }
 
         // -------------------------------
