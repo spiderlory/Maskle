@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Logic;
+using Model;
+using Model.Interfaces;
 using TMPro;
 using UnityEngine;
 
@@ -14,22 +16,14 @@ public class UIPresenter : MonoBehaviour
     
     // Sounds
     private MyAudioManager _myAudioManager;
-    
     public static UIPresenter Istance { get; private set; }
     
-    // UI DATA
-    public int[,] CurrentMatrix { get; private set; }
-    public int MatrixColumnsLength { get; private set; }
-
-    public List<Mask> MasksList;
-    public int ActiveMask => _loopLogic.CurrentMask;
-
-
     // UI Events
     public event Action UpdateMatrixUI;
     public event Action UpdateMaskUI;
     
     private GameLoopLogic _loopLogic;
+    private IReadOnlyGameState _gameState;
     
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Awake()
@@ -42,49 +36,33 @@ public class UIPresenter : MonoBehaviour
         Istance = this;
         _loopLogic = GameLoopLogic.Istance;
         _myAudioManager = MyAudioManager.Istance;
+        _gameState = GameState.Istance;
         
         _loopLogic.NextRoundEvent += UpdateUI;
     }
     
     public void UpdateUI()
     {
-        UpdateCurrentMatrix();
-        UpdateCurrentMasks();
-
+        UpdateMatrixUI?.Invoke();
+        UpdateMaskUI?.Invoke();
+        
         UpdateScore();
     }
     
-    
-    public void UpdateCurrentMatrix()
-    {
-        CurrentMatrix = _loopLogic.GetCurrentMatrix();
-        MatrixColumnsLength = CurrentMatrix.GetLength(1);
-        
-        UpdateMatrixUI?.Invoke();
-    }
-    
-    public void UpdateCurrentMasks()
-    {
-        MasksList = _loopLogic.GetMasks();
-        UpdateMaskUI?.Invoke();
-    }
 
     public void UpdateScore()
     {
-        _scoreText.text = _loopLogic.Score.ToString();
+        _scoreText.text = _gameState.GetCurrentScore().ToString();
     }
-    
-    
-    
-    
     
     
     // Events
     public void OnMatrixClick(int id)
     {
+        int colsNumber = _gameState.GetCurrentMatrix().GetLength(1);
         _myAudioManager.PlayCellClickSound();
-        int x = id / MatrixColumnsLength;
-        int y = id % MatrixColumnsLength;
+        int x = id / colsNumber;
+        int y = id % colsNumber;
         
         _loopLogic.ApplyMask(x, y);
         
@@ -94,7 +72,7 @@ public class UIPresenter : MonoBehaviour
     public void OnMaskClick(int id)
     {
         _myAudioManager.PlayMaskClickSound();
-        _loopLogic.CurrentMask = id;
+        _loopLogic.SetActiveMaskIndex(id);
         
         UpdateMaskUI?.Invoke();
     }
@@ -115,47 +93,19 @@ public class UIPresenter : MonoBehaviour
         Application.Quit();
         #endif
     }
-    
-    
-    // Getters and Setters
-    public int GetMatrixValueAt(int index)
-    {
-        return CurrentMatrix[index / MatrixColumnsLength, index % MatrixColumnsLength];
-    }
-
-    public int GetMaskApplications(int id)
-    {
-        return _loopLogic.GetMaskApplications(id);
-    }
 
     public bool isOnBorder(int id)
     {
-        int x = id / MatrixColumnsLength;
-        int y = id % MatrixColumnsLength;
+        int[,] currentMatrix = _gameState.GetCurrentMatrix();
+        int colsNumber = currentMatrix.GetLength(1);
+        
+        int x = id / colsNumber;
+        int y = id % colsNumber;
 
-        if (x == 0 || y == 0 || x == CurrentMatrix.GetLength(0) - 1 || y == CurrentMatrix.GetLength(1) - 1)
+        if (x == 0 || y == 0 || x == currentMatrix.GetLength(0) - 1 || y == currentMatrix.GetLength(1) - 1)
         {
             return true;
         }
         return false;
     }
-    
-    public int[] GetMaskValues(int id)
-    {
-        int[] values = new int[9];
-        Mask m = MasksList[id];
-
-        int index = 0;
-        for (int i = 0; i < m.NRows; i++)
-        {
-            for (int j = 0; j < m.NCols; j++)
-            {
-                values[index] = -m[i, j];
-                index++;
-            }
-        }
-        
-        return values;
-    }
-    
 }

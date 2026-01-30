@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using Model;
+using Model.Interfaces;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
@@ -20,18 +21,9 @@ namespace Logic
         private GamePreset _currentPreset;
 
         // Game State
-        public int Score { get; private set; }
-        public int RoundsCompleted { get; private set; }
-        public int CurrentTimer { get; private set; }
+        private GameState _gameState;
         
-        public int CurrentMask {get; set;}
-        
-        private int[,] initialMatrix;
-        private Stack<int[,]> _matrixHistory;
-        
-        private List<Mask> _masksList;
-        private Dictionary<Mask, int> _maskUses;
-        private Stack<Mask> _maskHistory;
+        private GameStateHistory _gameStateHistory;
         
         
         // Other Game Objects
@@ -53,18 +45,14 @@ namespace Logic
 
             _presenter = UIPresenter.Istance;
             
-            _masksList = new List<Mask>();
-            _matrixHistory = new Stack<int[,]>();
-            
-            _maskUses = new Dictionary<Mask, int>();
-            _maskHistory = new Stack<Mask>();
-            
-            // Game State
-            Score = 0;
+            _gameStateHistory = new GameStateHistory();
         }
 
         private void Start()
         {
+            _gameState = (GameState) GameState.Istance;
+            _gameState.Reset();
+            
             StartCoroutine(LateStart());
         }
 
@@ -80,8 +68,8 @@ namespace Logic
         
         public void NextRound()
         {
-            Score += 7;
-            RoundsCompleted++;
+            _gameState.IncreaseScore(7);
+            _gameState.IncreaseRound();
             
             UpdateState();
             InitRound();
@@ -100,27 +88,24 @@ namespace Logic
             UpdateState();
                 
             // Clear previous data
-            initialMatrix = new int[_currentPreset.rows, _currentPreset.cols];
+            int[,] initialMatrix = new int[_currentPreset.rows, _currentPreset.cols];
             Array.Clear(initialMatrix, 0, initialMatrix.Length);
 
-            _masksList.Clear();
-            _matrixHistory.Clear();
-            _maskUses.Clear();
+            _gameStateHistory.ClearHistory();
             
             // Generate Masks
             Mask tempMask;
             for (int i = 0; i < _currentPreset.nMasks; i++)
             {
                 tempMask = MaskFactory.CreateRandomMask(_currentPreset.maskRadius, _currentPreset.min, _currentPreset.max, _currentPreset.count);
-                _masksList.Add(tempMask);
-                _maskUses.Add(tempMask, 0);
+                _gameState.AddMask(tempMask);
             }
             
             // Apply masks at random on the matrix
             for (int i = 0; i < _currentPreset.nMasksApplication; i++)
             {
                 // Select a random mask
-                tempMask = _masksList[Random.Range(0, _masksList.Count)];
+                tempMask = (Mask) _gameState.GetMaskById(Random.Range(0, _gameState.GetMasksList().Count));
                 
                 // Select a random position
                 int x = Random.Range(1, _currentPreset.rows - 1);
@@ -128,22 +113,22 @@ namespace Logic
                 
                 // Apply mask
                 tempMask.ApplySum(initialMatrix, x, y, false);
-                
-                _maskUses[tempMask]++;
             }
             
-            _matrixHistory.Push(initialMatrix);
-            CurrentMask = 0;
+            _gameStateHistory.PushMatrix(initialMatrix);
+            _gameState.SetCurrentMatrix(_gameStateHistory.PeekMatrix());
+            
+            _gameState.SetActiveMaskByIndex(0);
         }
 
         private void UpdateState()
         {
             // Update difficulty based on completitions
-            if (RoundsCompleted < 1)
+            if (_gameState.GetCurrentRound() < 3)
                 _currentPreset =  _presetEasy;
-            else if (RoundsCompleted < 2)
+            else if (_gameState.GetCurrentRound() < 5)
                 _currentPreset = _presetMedium;
-            else if (RoundsCompleted < 3)
+            else if (_gameState.GetCurrentRound() < 7)
                 _currentPreset = _presetHard;
         }
 
@@ -152,86 +137,75 @@ namespace Logic
         // -----------------
         public void ApplyMask(int x, int y)
         {
-            Mask currentMask = _masksList[CurrentMask];
+            Mask currentMask = (Mask) _gameState.GetActiveMask();
 
-            if (_maskUses[currentMask] == 0)
+            if (currentMask.GetApplicationsCount() == 0)
             {
                 return;
             }
 
-            int[,] currentMatrix = GetCurrentMatrix();
+            int[,] currentMatrix = _gameStateHistory.PeekMatrix();
             int[,] copy = new int[_currentPreset.rows, _currentPreset.cols];
             Array.Copy(currentMatrix, copy, currentMatrix.Length);
             
             currentMask.ApplySum(copy, x, y, true);
             
             bool isAllZero = copy.Cast<int>().All(x => x == 0);
-
+            
+            // Next Round Condition
             if (isAllZero)
             {
                 Invoke(nameof(NextRound), 1f);
             }
             
             // Update State
-            _maskHistory.Push(currentMask);
-            _maskUses[currentMask]--;
+            _gameStateHistory.PushMask(currentMask);
 
             int index = 0;
-            if (_maskUses[currentMask] == 0)
+            if (currentMask.GetApplicationsCount() == 0)
             {
-                foreach (Mask mask in _masksList)
+                foreach (Mask mask in _gameState.GetMasksList())
                 {
-                    if (_maskUses[mask] != 0)
+                    if (mask.GetApplicationsCount() != 0)
                     {
-                        CurrentMask = index;
+                        _gameState.SetActiveMaskByIndex(index);
                         break;
                     }
                     index++;
                 }
             }
             
-            
-            _matrixHistory.Push(copy);
+            _gameStateHistory.PushMatrix(copy);
+            _gameState.SetCurrentMatrix(_gameStateHistory.PeekMatrix());
         }
 
         public void Undo()
         {
-            if (_matrixHistory.Count > 1 && _maskHistory.Count > 0)
+            if (_gameStateHistory.GetMatrixCount() > 1 && _gameStateHistory.GetMasksCount() > 0)
             {
-                _matrixHistory.Pop();
-                Mask lastMask = _maskHistory.Pop();
-                _maskUses[lastMask]++;
+                _gameStateHistory.PopMatrix();
+                Mask lastMask = _gameStateHistory.PopMask();
+                lastMask.UndoApplication();
+                
+                _gameState.SetCurrentMatrix(_gameStateHistory.PeekMatrix());
             }
             
         }
         
         // GETTERS and SETTERS
-        public int[,] GetCurrentMatrix()
+        
+        public void SetActiveMaskIndex(int index)
         {
-            return _matrixHistory.Peek();
-        }
-
-        public List<Mask> GetMasks()
-        {
-            return _masksList;
-        }
-
-        public int GetMaskApplications(Mask mask)
-        {
-            return _maskUses[mask];
+            _gameState.SetActiveMaskByIndex(index);
         }
         
-        public int GetMaskApplications(int id)
-        {
-            return _maskUses[_masksList[id]];
-        }
         
-        public void Print(int[,] matrix)
+        public static void Print(int[,] matrix)
         {
             string s = "";
-            for (int x = 0; x < _currentPreset.rows; x++)
+            for (int x = 0; x < matrix.GetLength(0); x++)
             {
-                for (int y = 0; y < _currentPreset.cols; y++)
+                for (int y = 0; y < matrix.GetLength(1); y++)
                 {
                     s += "[" + matrix[x, y] + "] ";
                 }
@@ -242,9 +216,3 @@ namespace Logic
         }
     }
 }
-
-///
-/// Game loop:
-///     game start: generate a simple matrix
-///     nextRound: if current matrix is null
-///     game end: timer ends
