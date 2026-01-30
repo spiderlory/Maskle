@@ -5,13 +5,14 @@ using System.Linq;
 using Model;
 using Model.Interfaces;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Random = UnityEngine.Random;
 
 namespace Logic
 {
     public class GameLoopLogic : MonoBehaviour
     {
-        public static GameLoopLogic Istance { get; private set; }
+        public static GameLoopLogic Instance { get; private set; }
         
         // Params
         [SerializeField] private GamePreset _presetEasy;
@@ -28,29 +29,32 @@ namespace Logic
         
         // Other Game Objects
         private UIPresenter _presenter;
+        private MySceneManager _sceneManager;
         
         // Events
         public event Action NextRoundEvent;
-        public event Action EndGame;
         
         
         private void Awake()
         {
-            if (Istance != null)
+            if (Instance != null)
             {
                 Destroy(gameObject);
             }
+            else
+            {
+                Instance = this;
 
-            Istance = this;
-
-            _presenter = UIPresenter.Istance;
+                _presenter = UIPresenter.Instance;
+                _sceneManager = MySceneManager.Instance;
             
-            _gameStateHistory = new GameStateHistory();
+                _gameStateHistory = new GameStateHistory();
+            }
         }
 
         private void Start()
         {
-            _gameState = (GameState) GameState.Istance;
+            _gameState = (GameState) GameState.Instance;
             _gameState.Reset();
             
             StartCoroutine(LateStart());
@@ -115,10 +119,10 @@ namespace Logic
                 tempMask.ApplySum(initialMatrix, x, y, false);
             }
             
+            _gameState.SetActiveMaskByIndex(0);
+            
             _gameStateHistory.PushMatrix(initialMatrix);
             _gameState.SetCurrentMatrix(_gameStateHistory.PeekMatrix());
-            
-            _gameState.SetActiveMaskByIndex(0);
         }
 
         private void UpdateState()
@@ -130,6 +134,16 @@ namespace Logic
                 _currentPreset = _presetMedium;
             else if (_gameState.GetCurrentRound() < 7)
                 _currentPreset = _presetHard;
+        }
+
+        public void EndGame()
+        {
+            StartCoroutine(DelayedGoToMenu());
+        }
+        private IEnumerator DelayedGoToMenu()
+        {
+            yield return new WaitForSeconds(1f);
+            _sceneManager.GoToMenu();
         }
 
         // -----------------

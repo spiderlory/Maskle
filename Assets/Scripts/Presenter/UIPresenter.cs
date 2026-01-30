@@ -14,9 +14,7 @@ public class UIPresenter : MonoBehaviour
     // UI ELEMENTS
     [SerializeField] private TMP_Text _scoreText;
     
-    // Sounds
-    private MyAudioManager _myAudioManager;
-    public static UIPresenter Istance { get; private set; }
+    public static UIPresenter Instance { get; private set; }
     
     // UI Events
     public event Action UpdateMatrixUI;
@@ -28,17 +26,18 @@ public class UIPresenter : MonoBehaviour
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     void Awake()
     {
-        if (Istance != null)
+        if (Instance != null)
         {
             Destroy(gameObject);
         }
-
-        Istance = this;
-        _loopLogic = GameLoopLogic.Istance;
-        _myAudioManager = MyAudioManager.Istance;
-        _gameState = GameState.Istance;
+        else
+        {
+            Instance = this;
+            _loopLogic = GameLoopLogic.Instance;
+            _gameState = GameState.Instance;
         
-        _loopLogic.NextRoundEvent += UpdateUI;
+            _loopLogic.NextRoundEvent += UpdateUI;
+        }
     }
     
     public void UpdateUI()
@@ -60,7 +59,6 @@ public class UIPresenter : MonoBehaviour
     public void OnMatrixClick(int id)
     {
         int colsNumber = _gameState.GetCurrentMatrix().GetLength(1);
-        _myAudioManager.PlayCellClickSound();
         int x = id / colsNumber;
         int y = id % colsNumber;
         
@@ -71,7 +69,6 @@ public class UIPresenter : MonoBehaviour
 
     public void OnMaskClick(int id)
     {
-        _myAudioManager.PlayMaskClickSound();
         _loopLogic.SetActiveMaskIndex(id);
         
         UpdateMaskUI?.Invoke();
@@ -82,16 +79,6 @@ public class UIPresenter : MonoBehaviour
         _loopLogic.Undo();
         
         UpdateUI();
-    }
-
-    public void OnExit()
-    {
-        print("OnExit");
-        #if UNITY_EDITOR
-        UnityEditor.EditorApplication.isPlaying = false;
-        #else
-        Application.Quit();
-        #endif
     }
 
     public bool isOnBorder(int id)
